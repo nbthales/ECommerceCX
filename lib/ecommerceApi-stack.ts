@@ -17,9 +17,20 @@ export class ECommerceApiStack extends cdk.Stack{
         })
 
         const productsFunctionIntegration = new apigateway.LambdaIntegration(props.productsHandler)
+        const productsResource = apiGW.root.addResource("products")
 
         // GET /products
-        const productsResource = apiGW.root.addResource("products")
         productsResource.addMethod("GET", productsFunctionIntegration)
+        //POST /products
+        productsResource.addMethod("POST", productsFunctionIntegration)
+
+        const productIdResource = productsResource.addResource("{id}")
+
+        // GET /products/{id}
+        productIdResource.addMethod("GET", productsFunctionIntegration)
+        // PUT /products/{id}
+        productIdResource.addMethod("PUT", productsFunctionIntegration)
+        // DELETE /products/{id}
+        productIdResource.addMethod("DELETE", productsFunctionIntegration)
       }
   }
