@@ -3,9 +3,8 @@ import 'source-map-support/register';
 import * as cdk from '@aws-cdk/core';
 import { ProductsFunctionStack } from '../lib/productsFunction-stack';
 import { ECommerceApiStack } from '../lib/ecommerceApi-stack';
-import { ProductsDbdStack } from '../lib/productsDbd-stack';
-import { EventsDbdStack } from '../lib/eventsDdb-stack';
-
+import { ProductsDdbStack } from '../lib/productsDdb-stack';
+import { EventsDdbStack } from '../lib/eventsDdb-stack';
 
 const app = new cdk.App();
 
@@ -17,30 +16,30 @@ const env = {
 const tags = {
   cost: "ECommerceCX",
   team: "SiecolaCodeCX"
-}
+} 
 
-const eventsDbdStack = new EventsDbdStack(app, "EventsDdb", {
+const eventsDdbStack = new EventsDdbStack(app, "EventsDdb", {
   env: env,
   tags: tags,
 })
 
-const productsDbdStack = new ProductsDbdStack(app, "ProductsDbd", {
+const productsDdbStack = new ProductsDdbStack(app, "ProductsDdb", {
   env: env,
   tags: tags,
-  terminationProtection: true
+  //terminationProtection: true
 })
 
 const productsFunctionStack = new ProductsFunctionStack(app, "ProductsFunction", {
-  productsDbd: productsDbdStack.table,
-  eventsDdb: eventsDbdStack.table,
+  productsDdb: productsDdbStack.table,
+  eventsDdb: eventsDdbStack.table,
   env: env,
   tags: tags
 })
-productsFunctionStack.addDependency(productsDbdStack)
-productsFunctionStack.addDependency(eventsDbdStack)
+productsFunctionStack.addDependency(productsDdbStack)
+productsFunctionStack.addDependency(eventsDdbStack)
 
 const eCommerceApiStack = new ECommerceApiStack(app, "ECommerceApi", {
-  productsHandler: productsFunctionStack.productsHander,
+  productsHandler: productsFunctionStack.productsHandler,
   env: env,
   tags: tags
 })
