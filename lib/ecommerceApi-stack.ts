@@ -6,14 +6,15 @@ interface ECommerceApiStackProps extends cdk.StackProps {
     productsHandler: lambdaNodeJS.NodejsFunction
 }
 
-export class ECommerceApiStack extends cdk.Stack{
+export class ECommerceApiStack extends cdk.Stack {
 
-    constructor(scope: cdk.Construct, id: string, props: ECommerceApiStackProps){
+    constructor(scope: cdk.Construct, id: string, props: ECommerceApiStackProps) {
         super(scope, id, props)
-  
+
         const apiGW = new apigateway.RestApi(this, "ecommerce-api", {
             restApiName: "Ecommerce Service",
             description: "This is the Ecommerce service",
+            //endpointTypes: apigateway.EndpointType.EDGE
         })
 
         const productsFunctionIntegration = new apigateway.LambdaIntegration(props.productsHandler)
@@ -32,5 +33,5 @@ export class ECommerceApiStack extends cdk.Stack{
         productIdResource.addMethod("PUT", productsFunctionIntegration)
         // DELETE /products/{id}
         productIdResource.addMethod("DELETE", productsFunctionIntegration)
-      }
-  }
+    }
+}
