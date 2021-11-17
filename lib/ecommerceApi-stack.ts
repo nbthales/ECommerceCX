@@ -3,7 +3,8 @@ import * as apigateway from "@aws-cdk/aws-apigateway"
 import * as lambdaNodeJS from "@aws-cdk/aws-lambda-nodejs"
 
 interface ECommerceApiStackProps extends cdk.StackProps {
-   productsHandler: lambdaNodeJS.NodejsFunction
+   productsHandler: lambdaNodeJS.NodejsFunction,
+   ordersHandler: lambdaNodeJS.NodejsFunction
 }
 
 export class ECommerceApiStack extends cdk.Stack {
@@ -19,20 +20,32 @@ export class ECommerceApiStack extends cdk.Stack {
       const productsFunctionIntegration = new apigateway.LambdaIntegration(props.productsHandler)
 
       const productsResource = apiGW.root.addResource("products")
-
       // GET /products
       productsResource.addMethod("GET", productsFunctionIntegration)
       // POST /products
       productsResource.addMethod("POST", productsFunctionIntegration)
-
       const productIdResource = productsResource.addResource("{id}")
       // GET /products/{id}
       productIdResource.addMethod("GET", productsFunctionIntegration)
-
       // PUT /products/{id}
       productIdResource.addMethod("PUT", productsFunctionIntegration)
-
       // DELETE /products/{id}
       productIdResource.addMethod("DELETE", productsFunctionIntegration)
+
+      const ordersFunctionIntegration = new apigateway.LambdaIntegration(props.ordersHandler)
+      // /orders
+      const ordersResource = apiGW.root.addResource("orders")
+
+      //GET /orders
+      //GET /orders?email=matilde@siecola.com.br
+      //GET /orders?email=matilde@siecola.com.br&orderId=123
+      ordersResource.addMethod("GET", ordersFunctionIntegration)
+
+      //DELETE /orders?email=matilde@siecola.com.br&orderId=123
+      ordersResource.addMethod("DELETE", ordersFunctionIntegration)
+
+      //POST /orders
+      ordersResource.addMethod("POST", ordersFunctionIntegration)
+      
    }
 }

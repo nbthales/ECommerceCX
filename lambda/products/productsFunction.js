@@ -121,7 +121,8 @@ exports.handler = async function(event, context) {
 function sendProductEvent(product, event, email, lambdaRequestId) {
    const params = {
       FunctionName: productEventsFunctionName,
-      InvocationType: "RequestResponse",  //sync
+      //InvocationType: "RequestResponse",  //sync  
+      InvocationType: "Event",  //async  
       Payload: JSON.stringify({
          productEvent: {
             requestId: lambdaRequestId,
