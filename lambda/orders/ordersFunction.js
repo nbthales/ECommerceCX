@@ -6,6 +6,7 @@ const xRay = AWSXray.captureAWS(require("aws-sdk"))
 
 const productsDdb = process.env.PRODUCTS_DDB
 const ordersDdb = process.env.ORDERS_DDB
+const orderEventsTopicArn = process.env.ORDERS_EVENTS_TOPIC_ARN
 const awsRegion = process.env.AWS_REGION
 
 AWS.config.update({
@@ -13,6 +14,7 @@ AWS.config.update({
 })
 
 const ddbClient = new AWS.DynamoDB.DocumentClient()
+const snsClient = new AWS.SNS({ apiVersion: "2010-03-31" })
 
 exports.handler = async function (event, context) {
     const method = event.httpMethod;
@@ -27,13 +29,33 @@ exports.handler = async function (event, context) {
             if (event.queryStringParameters) {
                 if (event.queryStringParameters.email) {
                     if (event.queryStringParameters.orderId) {
-                        //Get all orders from an user
-                    } else {
                         //Get a specific order
+                        const data = await getOrder(event.queryStringParameters.email, event.queryStringParameters.orderId)
+                        if (data.Item) {
+                            return {
+                                statusCode: 200,
+                                body: JSON.stringify(convertToOrderResponse(data.Item))
+                            }
+                        } else {
+                            return {
+                                statusCode: 404,
+                                body: JSON.stringify('Order not found')
+                            }
+                        }
+                    } else {
+                        //Get all orders from an user
+                        const data = await getOrdersByEmail(event.queryStringParameters.email)
+                        return {
+                            body: JSON.stringify(data.Items.map(convertToOrderResponse))
+                        }
                     }
                 }
             } else {
                 //Get all orders
+                const data = await getAllOrders()
+                return {
+                    body: JSON.stringify(data.Items.map(convertToOrderResponse))
+                }
             }
         } else if (method === 'POST') {
             //Create an order
@@ -44,7 +66,10 @@ exports.handler = async function (event, context) {
                 result.Responses.products.forEach((product) => {
                     products.push(product)
                 })
+
                 const orderCreated = await createOrder(orderRequest, products)
+
+                const eventResult = await sendOrderEvent(orderCreated, "ORDER_CREATED", lambdaRequestId)
 
                 return {
                     statusCode: 201,
@@ -53,19 +78,135 @@ exports.handler = async function (event, context) {
             } else {
                 return {
                     statusCode: 404,
-                    body: 'Some product was not found'
+                    body: 'Some product was not foud'
                 }
             }
-
-            //await createOrder(orderRequest, products)
         } else if (method === 'DELETE') {
             //Delete an order
+            const data = await deleteOrder(event.queryStringParameters.email, event.queryStringParameters.orderId)
+            console.log(data)
+            if (data.Attributes) {
+                return {
+                    statusCode: 200,
+                    body: JSON.stringify(convertToOrderResponse(data.Attributes))
+                }
+            } else {
+                return {
+                    statusCode: 404,
+                    body: JSON.stringify('Order not found')
+                }
+            }
+            /*
+               const data = await getOrder(event.queryStringParameters.email, event.queryStringParameters.orderId)
+               if (data.Item) {
+                  await deleteOrder(event.queryStringParameters.email, event.queryStringParameters.orderId)
+                  return {
+                     statusCode: 200,
+                     body: JSON.stringify(convertToOrderResponse(data.Item))
+                  }
+               } else {
+                  return {
+                     statusCode: 404,
+                     body: JSON.stringify('Order not found')
+                  }
+               }
+               */
         }
     }
+
     return {
         statusCode: 400,
         body: JSON.stringify('Bad request')
     }
+}
+
+function sendOrderEvent(order, eventType, lambdaRequestId) {
+    /*
+        {
+            "eventType": "ORDER_CREATED",
+            "data": "{\"email\": \"matilde@siecola.com.br]", \"orderId\"}"
+        }
+    */
+
+    const productCodes = []
+    order.products.forEach((product) => {
+        productCodes.push(product.code)
+    })
+
+    const orderEvent = {
+        email: order.pk,
+        orderId: order.sk,
+        billing: order.billing,
+        shipping: shipping,
+        requestId: lambdaRequestId,
+        productCode: productCodes
+    }
+
+    const envelope = {
+        eventType: eventType,
+        data: JSON.stringify(orderEvent)
+    }
+
+    const params = {
+        Message: JSON.stringify(envelope),
+        TopicArn: orderEventsTopicArn
+    }
+    return snsClient.publish(params).promise()
+}
+
+function deleteOrder(email, orderId) {
+    const params = {
+        TableName: ordersDdb,
+        Key: {
+            pk: email,
+            sk: orderId
+        },
+        ReturnValues: "ALL_OLD"
+    }
+    return ddbClient.delete(params).promise()
+}
+
+/*
+function deleteOrder(email, orderId) {
+   const params = {
+      TableName: ordersDdb,
+      Key: {
+         pk: email,
+         sk: orderId 
+      }
+   }
+   return ddbClient.delete(params).promise()
+}
+*/
+
+function getOrder(email, orderId) {
+    const params = {
+        TableName: ordersDdb,
+        Key: {
+            pk: email,
+            sk: orderId
+        }
+    }
+    return ddbClient.get(params).promise()
+}
+
+function getOrdersByEmail(email) {
+    const params = {
+        TableName: ordersDdb,
+        KeyConditionExpression: "pk = :email",
+        ExpressionAttributeValues: {
+            ":email": email
+        }
+    }
+
+    return ddbClient.query(params).promise()
+}
+
+function getAllOrders() {
+    const params = {
+        TableName: ordersDdb
+    }
+    return ddbClient.scan(params).promise()
 }
 
 function fetchProducts(orderRequest) {
@@ -73,18 +214,17 @@ function fetchProducts(orderRequest) {
 
     /*
     [
-        {
-            id: "123-abc"
-        },
-        {
-            id: "456-bca"
-        }
+       {
+          id: "123-abc"
+       },
+       {
+          id: "456-bca"
+       }
     ]
     */
-
     orderRequest.productIds.forEach((productId) => {
         keys.push({
-            id: productId
+            id: productId,
         })
     })
 
@@ -92,13 +232,10 @@ function fetchProducts(orderRequest) {
         RequestItems: {
             [productsDdb]: {
                 Keys: keys
-            }/*,
-            [ordersDdb]:{
-
-            }*/
+            }
         }
     }
-    return ddbClient.batchGet(params).promise() //where in
+    return ddbClient.batchGet(params).promise()
 }
 
 async function createOrder(orderRequest, products) {
@@ -139,23 +276,23 @@ async function createOrder(orderRequest, products) {
 //Order response
 /*
 {
-    "email": "mailta@siecola.com.br",
-    "id": "123-abc",
-    "createdAt": 123456,
-    "products": [
-        {
-            "code": "COD1",
-            "price": 10.5
-        }
-    ],
-    "billing": {
-        "payment": "CASH",
-        "totalPrice": 21.0
-    },
-    "shipping": {
-        "type": "URGENT",
-        "carrier": "FEDEX"
-    }
+   "email": "matilde@siecola.com.br",
+   "id": "123-abc",
+   "createdAt": 12354654,
+   products: [
+      {
+         "code": "COD1",
+         "price": 10.5 
+      }
+   ],
+   "billing": {
+      "payment": "CASH",
+      "totalPrice": 21.0
+   },
+   "shipping": {
+      "type": "URGENT",
+      "carrier": "FEDEX"
+   }
 }
 */
 function convertToOrderResponse(order) {

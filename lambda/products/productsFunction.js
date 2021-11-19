@@ -9,44 +9,44 @@ const awsRegion = process.env.AWS_REGION
 const productEventsFunctionName = process.env.PRODUCT_EVENTS_FUNCTION_NAME
 
 AWS.config.update({
-   region: awsRegion   
+   region: awsRegion
 })
 
 const ddbClient = new AWS.DynamoDB.DocumentClient()
 const lambdaClient = new AWS.Lambda()
 
-exports.handler = async function(event, context) {
+exports.handler = async function (event, context) {
    const method = event.httpMethod;
 
    const apiRequestId = event.requestContext.requestId;
    const lambdaRequestId = context.awsRequestId;
 
-   console.log(`API Gateway RequestId: ${apiRequestId} - Lambda RequestId: ${lambdaRequestId}`)      
+   console.log(`API Gateway RequestId: ${apiRequestId} - Lambda RequestId: ${lambdaRequestId}`)
 
    // /products
    if (event.resource === '/products') {
       if (method === 'GET') {
          //GET /products
          const data = await getAllProducts()
-         
+
          return {
             statusCode: 200,
             body: JSON.stringify(data.Items)
-         }         
+         }
       } else if (method === 'POST') {
          //POST /products
          const product = JSON.parse(event.body)
          product.id = uuid.v4()
 
          await createProduct(product)
-         const result = await sendProductEvent(product, "PRODUCT_CREATED", "matilde@siecola.com.br", 
+         const result = await sendProductEvent(product, "PRODUCT_CREATED", "matilde@siecola.com.br",
             lambdaRequestId)
          console.log(result)
          return {
             statusCode: 201,
             body: JSON.stringify(product)
          }
-      }   
+      }
    } else if (event.resource === '/products/{id}') {
       const productId = event.pathParameters.id
       if (method === 'GET') {
@@ -69,8 +69,8 @@ exports.handler = async function(event, context) {
          if (data.Item) {
             const product = JSON.parse(event.body)
             await updateProduct(productId, product)
-            const result = await sendProductEvent(product, "PRODUCT_UPDATED", "doralice@siecola.com.br", 
-            lambdaRequestId)
+            const result = await sendProductEvent(product, "PRODUCT_UPDATED", "doralice@siecola.com.br",
+               lambdaRequestId)
 
             console.log(result)
             return {
@@ -89,7 +89,7 @@ exports.handler = async function(event, context) {
          if (data.Item) {
             const deletePromise = deleteProduct(productId)
 
-            const sendEventPromise = sendProductEvent(data.Item, "PRODUCT_DELETED", 
+            const sendEventPromise = sendProductEvent(data.Item, "PRODUCT_DELETED",
                "clotilde@siecola.com.br", lambdaRequestId)
 
             const result = await Promise.all([deletePromise, sendEventPromise])
@@ -113,7 +113,7 @@ exports.handler = async function(event, context) {
       body: JSON.stringify({
          message: "Bad request",
          apiGwRequestId: apiRequestId,
-         lambdaRequestId: lambdaRequestId             
+         lambdaRequestId: lambdaRequestId
       })
    }
 }
@@ -130,9 +130,9 @@ function sendProductEvent(product, event, email, lambdaRequestId) {
             productId: product.id,
             productCode: product.code,
             productPrice: product.price,
-            email: email    
+            email: email
          }
-      })      
+      })
    }
 
    return lambdaClient.invoke(params).promise()
@@ -154,12 +154,13 @@ function updateProduct(productId, product) {
       Key: {
          id: productId
       },
-      UpdateExpression: "set productName = :n, code = :c, price = :p, model = :m",
+      UpdateExpression: "set productName = :n, code = :c, price = :p, model = :m, productUrl = :u",
       ExpressionAttributeValues: {
          ":n": product.productName,
          ":c": product.code,
          ":p": product.price,
-         ":m": product.model
+         ":m": product.model,
+         ":u": product.productUrl
       }
    }
    return ddbClient.update(params).promise()
@@ -187,7 +188,8 @@ function createProduct(product) {
          productName: product.productName,
          code: product.code,
          price: product.price,
-         model: product.model    
+         model: product.model,
+         productUrl: product.productUrl
       }
    }
    return ddbClient.put(params).promise()

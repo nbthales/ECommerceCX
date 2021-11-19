@@ -2,6 +2,8 @@ import * as lambda from "@aws-cdk/aws-lambda"
 import * as lambdaNodeJS from "@aws-cdk/aws-lambda-nodejs"
 import * as cdk from "@aws-cdk/core"
 import * as dynamodb from "@aws-cdk/aws-dynamodb"
+import * as sns from "@aws-cdk/aws-sns"
+import * as subs from "@aws-cdk/aws-sns-subscriptions"
 
 interface OrdersApplicationStackProps extends cdk.StackProps {
     productsDdb: dynamodb.Table
@@ -31,6 +33,11 @@ export class OrdersApplicationStack extends cdk.Stack {
             writeCapacity: 1
         })
 
+        const ordersTopic = new sns.Topic(this, "OrderEventsTopic", {
+            displayName: "Orders events topic",
+            topicName: "order-events"
+        })
+
         this.ordersHandler = new lambdaNodeJS.NodejsFunction(this, "OrdersFunction", {
             functionName: "OrdersFunction",
             entry: "lambda/orders/ordersFunction.js",
@@ -46,10 +53,12 @@ export class OrdersApplicationStack extends cdk.Stack {
             environment: {
                 PRODUCTS_DDB: props.productsDdb.tableName,
                 ORDERS_DDB: ordersDdb.tableName,
+                ORDERS_EVENTS_TOPIC_ARN: ordersTopic.topicArn
             },
         })
 
         props.productsDdb.grantReadData(this.ordersHandler)
         ordersDdb.grantReadWriteData(this.ordersHandler)
+        ordersTopic.grantPublish(this.ordersHandler)
     }
 }
