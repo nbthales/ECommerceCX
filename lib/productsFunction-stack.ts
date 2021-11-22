@@ -2,6 +2,7 @@ import * as lambda from "@aws-cdk/aws-lambda"
 import * as lambdaNodeJS from "@aws-cdk/aws-lambda-nodejs"
 import * as cdk from "@aws-cdk/core"
 import * as dynamodb from "@aws-cdk/aws-dynamodb"
+import * as iam from "@aws-cdk/aws-iam"
 
 interface ProductsFunctionStackProps extends cdk.StackProps {
    productsDdb: dynamodb.Table,
@@ -11,7 +12,7 @@ interface ProductsFunctionStackProps extends cdk.StackProps {
 export class ProductsFunctionStack extends cdk.Stack {
    readonly productsHandler: lambdaNodeJS.NodejsFunction
 
-   constructor (scope: cdk.Construct, id: string, props: ProductsFunctionStackProps) {
+   constructor(scope: cdk.Construct, id: string, props: ProductsFunctionStackProps) {
       super(scope, id, props)
 
       const productEventsHandler = new lambdaNodeJS.NodejsFunction(this, "ProductEventsFunction", {
@@ -24,13 +25,25 @@ export class ProductsFunctionStack extends cdk.Stack {
          insightsVersion: lambda.LambdaInsightsVersion.VERSION_1_0_98_0,
          bundling: {
             minify: false,
-            sourceMap: false,                        
+            sourceMap: false,
          },
          environment: {
             EVENTS_DDB: props.eventsDdb.tableName
-         },         
+         },
       })
-      props.eventsDdb.grantWriteData(productEventsHandler);
+      //props.eventsDdb.grantWriteData(productEventsHandler);
+      const eventsDdbPolicy = new iam.PolicyStatement({
+         effect: iam.Effect.ALLOW,
+         actions: ["dynamodb:PutItem"],
+         resources: [props.eventsDdb.tableArn],
+         conditions: {
+            ['ForAllValues:StringLike']: {
+               'dynamodb:LeadingKeys': ['#product_*']
+            }
+         }
+      })
+      productEventsHandler.addToRolePolicy(eventsDdbPolicy)
+
 
       this.productsHandler = new lambdaNodeJS.NodejsFunction(this, "ProductsFunction", {
          functionName: "ProductsFunction",
@@ -42,15 +55,15 @@ export class ProductsFunctionStack extends cdk.Stack {
          insightsVersion: lambda.LambdaInsightsVersion.VERSION_1_0_98_0,
          bundling: {
             minify: false,
-            sourceMap: false,                        
+            sourceMap: false,
          },
          environment: {
             PRODUCTS_DDB: props.productsDdb.tableName,
             PRODUCT_EVENTS_FUNCTION_NAME: productEventsHandler.functionName
-         },         
+         },
       })
       props.productsDdb.grantReadWriteData(this.productsHandler)
-      
+
       productEventsHandler.grantInvoke(this.productsHandler)
 
    }

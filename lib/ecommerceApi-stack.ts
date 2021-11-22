@@ -9,12 +9,12 @@ interface ECommerceApiStackProps extends cdk.StackProps {
 
 export class ECommerceApiStack extends cdk.Stack {
 
-   constructor (scope: cdk.Construct, id: string, props: ECommerceApiStackProps) {
+   constructor(scope: cdk.Construct, id: string, props: ECommerceApiStackProps) {
       super(scope, id, props)
 
       const apiGW = new apigateway.RestApi(this, "ecommerce-api", {
          restApiName: "Ecommerce Service",
-         description: "This is the Ecommerce service",           
+         description: "This is the Ecommerce service",
       })
 
       this.createProductsResource(apiGW, props)

@@ -8,12 +8,10 @@ import { EventsDdbStack } from '../lib/eventsDdb-stack';
 import { OrdersApplicationStack } from '../lib/ordersApplication-stack';
 
 const app = new cdk.App();
-
 const env = {
   region: "us-east-1",
   //account: "347563805954"
 }
-
 const tags = {
   cost: "ECommerceCX",
   team: "SiecolaCodeCX"
@@ -27,7 +25,6 @@ const eventsDdbStack = new EventsDdbStack(app, "EventsDdb", {
 const productsDdbStack = new ProductsDdbStack(app, "ProductsDdb", {
   env: env,
   tags: tags,
-  //terminationProtection: true
 })
 
 const productsFunctionStack = new ProductsFunctionStack(app, "ProductsFunction", {
@@ -41,10 +38,12 @@ productsFunctionStack.addDependency(eventsDdbStack)
 
 const ordersApplicationStack = new OrdersApplicationStack(app, "OrdersApplication", {
   productsDdb: productsDdbStack.table,
+  eventsDdb: eventsDdbStack.table,
   env: env,
   tags: tags
 })
 ordersApplicationStack.addDependency(productsDdbStack)
+ordersApplicationStack.addDependency(eventsDdbStack)
 
 const eCommerceApiStack = new ECommerceApiStack(app, "ECommerceApi", {
   productsHandler: productsFunctionStack.productsHandler,

@@ -70,6 +70,7 @@ exports.handler = async function (event, context) {
                 const orderCreated = await createOrder(orderRequest, products)
 
                 const eventResult = await sendOrderEvent(orderCreated, "ORDER_CREATED", lambdaRequestId)
+                console.log(`Order created event sent - OrderId: ${orderCreated.sk} - MessageId: ${eventResult.MessageId}`)
 
                 return {
                     statusCode: 201,
@@ -86,6 +87,9 @@ exports.handler = async function (event, context) {
             const data = await deleteOrder(event.queryStringParameters.email, event.queryStringParameters.orderId)
             console.log(data)
             if (data.Attributes) {
+                const eventResult = await sendOrderEvent(data.Attributes, "ORDER_DELETED", lambdaRequestId)
+                console.log(`Order deleted event sent - OrderId: ${data.Attributes.sk} - MessageId: ${eventResult.MessageId}`)
+
                 return {
                     statusCode: 200,
                     body: JSON.stringify(convertToOrderResponse(data.Attributes))
@@ -122,10 +126,10 @@ exports.handler = async function (event, context) {
 
 function sendOrderEvent(order, eventType, lambdaRequestId) {
     /*
-        {
-            "eventType": "ORDER_CREATED",
-            "data": "{\"email\": \"matilde@siecola.com.br]", \"orderId\"}"
-        }
+       {
+          "enventType": "ORDER_DELETED",
+          "data": "{\"email\": \"matilde@siecola.com.br]", \"orderId\"}"
+       }
     */
 
     const productCodes = []
@@ -137,19 +141,23 @@ function sendOrderEvent(order, eventType, lambdaRequestId) {
         email: order.pk,
         orderId: order.sk,
         billing: order.billing,
-        shipping: shipping,
+        shipping: order.shipping,
         requestId: lambdaRequestId,
-        productCode: productCodes
+        productCodes: productCodes
     }
-
     const envelope = {
         eventType: eventType,
         data: JSON.stringify(orderEvent)
     }
-
     const params = {
         Message: JSON.stringify(envelope),
-        TopicArn: orderEventsTopicArn
+        TopicArn: orderEventsTopicArn,
+        MessageAttributes: {
+            eventType: {
+                DataType: "String",
+                StringValue: eventType, //ORDER_CREATED | ORDER_DELETED
+            }
+        }
     }
     return snsClient.publish(params).promise()
 }

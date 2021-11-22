@@ -121,8 +121,7 @@ exports.handler = async function (event, context) {
 function sendProductEvent(product, event, email, lambdaRequestId) {
    const params = {
       FunctionName: productEventsFunctionName,
-      //InvocationType: "RequestResponse",  //sync  
-      InvocationType: "Event",  //async  
+      InvocationType: "Event",  //async
       Payload: JSON.stringify({
          productEvent: {
             requestId: lambdaRequestId,
@@ -189,7 +188,7 @@ function createProduct(product) {
          code: product.code,
          price: product.price,
          model: product.model,
-         productUrl: product.productUrl
+         productUrl: product.productUrl,
       }
    }
    return ddbClient.put(params).promise()

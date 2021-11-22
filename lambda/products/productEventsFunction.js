@@ -7,12 +7,12 @@ const eventsDdb = process.env.EVENTS_DDB
 const awsRegion = process.env.AWS_REGION
 
 AWS.config.update({
-   region: awsRegion   
+   region: awsRegion
 })
 
 const ddbClient = new AWS.DynamoDB.DocumentClient()
 
-exports.handler = async function(event, context) {
+exports.handler = async function (event, context) {
    console.log(event)
 
    await createEvent(event.productEvent)
@@ -22,7 +22,7 @@ exports.handler = async function(event, context) {
          productEventCreated: true,
          message: "OK"
       }
-   ))
+      ))
 }
 
 function createEvent(productEvent) {
@@ -41,7 +41,7 @@ function createEvent(productEvent) {
    const params = {
       TableName: eventsDdb,
       Item: {
-         pk: `#products_${productEvent.productCode}`,
+         pk: `#product_${productEvent.productCode}`,
          sk: `${productEvent.eventType}#${timestamp}`,
          ttl: ttl,
          email: productEvent.email,
@@ -53,6 +53,6 @@ function createEvent(productEvent) {
             price: productEvent.productPrice
          }
       }
-    }
-    return ddbClient.put(params).promise()
+   }
+   return ddbClient.put(params).promise()
 }
