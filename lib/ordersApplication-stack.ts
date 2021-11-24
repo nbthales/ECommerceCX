@@ -5,6 +5,8 @@ import * as dynamodb from "@aws-cdk/aws-dynamodb"
 import * as sns from "@aws-cdk/aws-sns"
 import * as subs from "@aws-cdk/aws-sns-subscriptions"
 import * as iam from "@aws-cdk/aws-iam"
+import * as sqs from "@aws-cdk/aws-sqs"
+import * as lambdaEventSource from "@aws-cdk/aws-lambda-event-sources"
 
 interface OrdersApplicationStackProps extends cdk.StackProps {
     productsDdb: dynamodb.Table,
@@ -111,5 +113,46 @@ export class OrdersApplicationStack extends cdk.Stack {
                 })
             }
         }))
+
+        const orderEventsDlq = new sqs.Queue(this, "OrderEventsDlq", {
+            queueName: "order-events-dlq",
+            retentionPeriod: cdk.Duration.days(10)
+        })
+
+        const orderEventsQueue = new sqs.Queue(this, "OrderEventsQueue", {
+            queueName: "order-events",
+            deadLetterQueue: {
+                maxReceiveCount: 3,
+                queue: orderEventsDlq
+            }
+        })
+
+        ordersTopic.addSubscription(new subs.SqsSubscription(orderEventsQueue, {
+            filterPolicy: {
+                eventType: sns.SubscriptionFilter.stringFilter({
+                    allowlist: ['ORDER_CREATED'],
+                })
+            }
+        }))
+
+        const orderEmailsHandler = new lambdaNodeJS.NodejsFunction(this, "OrderEmailsFunction", {
+            functionName: "OrderEmailsFunction",
+            entry: "lambda/orders/orderEmailsFunction.js",
+            handler: "handler",
+            memorySize: 128,
+            timeout: cdk.Duration.seconds(10),
+            tracing: lambda.Tracing.ACTIVE,
+            insightsVersion: lambda.LambdaInsightsVersion.VERSION_1_0_98_0,
+            bundling: {
+                minify: false,
+                sourceMap: false,
+            }
+        })
+        orderEmailsHandler.addEventSource(new lambdaEventSource.SqsEventSource(orderEventsQueue, {
+            batchSize: 5,
+            enabled: true,
+            maxBatchingWindow: cdk.Duration.seconds(10)
+        }))
+        orderEventsQueue.grantConsumeMessages(orderEmailsHandler)
     }
 }
