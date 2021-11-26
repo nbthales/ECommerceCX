@@ -31,8 +31,27 @@ export class OrdersApplicationStack extends cdk.Stack {
             },
             removalPolicy: cdk.RemovalPolicy.DESTROY,
             billingMode: dynamodb.BillingMode.PROVISIONED,
-            readCapacity: 1,
-            writeCapacity: 1
+            //readCapacity: 1,
+            //writeCapacity: 1
+        })
+        const readScale = ordersDdb.autoScaleReadCapacity({
+            maxCapacity: 2,
+            minCapacity: 1
+        })
+        readScale.scaleOnUtilization({
+            targetUtilizationPercent: 80,
+            scaleInCooldown: cdk.Duration.seconds(120),
+            scaleOutCooldown: cdk.Duration.seconds(60)
+        })
+
+        const writeScale = ordersDdb.autoScaleWriteCapacity({
+            maxCapacity: 4,
+            minCapacity: 1
+        })
+        writeScale.scaleOnUtilization({
+            targetUtilizationPercent: 20,
+            scaleInCooldown: cdk.Duration.seconds(60),
+            scaleOutCooldown: cdk.Duration.seconds(60)
         })
 
         const ordersTopic = new sns.Topic(this, "OrderEventsTopic", {
@@ -63,6 +82,10 @@ export class OrdersApplicationStack extends cdk.Stack {
         ordersDdb.grantReadWriteData(this.ordersHandler)
         ordersTopic.grantPublish(this.ordersHandler)
 
+        const orderEmailsDlq = new sqs.Queue(this, "OrderEmailsDlq", {
+            queueName: "order-emails-dlq"
+        })
+
         const orderEventsHandler = new lambdaNodeJS.NodejsFunction(this, "OrderEventsFunction", {
             functionName: "OrderEventsFunction",
             entry: "lambda/orders/orderEventsFunction.js",
@@ -71,6 +94,10 @@ export class OrdersApplicationStack extends cdk.Stack {
             timeout: cdk.Duration.seconds(10),
             tracing: lambda.Tracing.ACTIVE,
             insightsVersion: lambda.LambdaInsightsVersion.VERSION_1_0_98_0,
+            deadLetterQueueEnabled: true,
+            deadLetterQueue: orderEmailsDlq,
+            retryAttempts: 2,
+            //reservedConcurrentExecutions: 5,
             bundling: {
                 minify: false,
                 sourceMap: false,
@@ -100,6 +127,7 @@ export class OrdersApplicationStack extends cdk.Stack {
             timeout: cdk.Duration.seconds(10),
             tracing: lambda.Tracing.ACTIVE,
             insightsVersion: lambda.LambdaInsightsVersion.VERSION_1_0_98_0,
+            //deadLetterQueueEnabled: true,
             bundling: {
                 minify: false,
                 sourceMap: false,
@@ -154,5 +182,12 @@ export class OrdersApplicationStack extends cdk.Stack {
             maxBatchingWindow: cdk.Duration.seconds(10)
         }))
         orderEventsQueue.grantConsumeMessages(orderEmailsHandler)
+
+        const orderEmailSesPolicy = new iam.PolicyStatement({
+            effect: iam.Effect.ALLOW,
+            actions: ["ses:SendEmail", "ses:SendRawEmail"],
+            resources: ["*"]
+        })
+        orderEmailsHandler.addToRolePolicy(orderEmailSesPolicy)
     }
 }

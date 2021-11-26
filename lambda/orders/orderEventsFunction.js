@@ -15,6 +15,8 @@ const ddbClient = new AWS.DynamoDB.DocumentClient()
 exports.handler = async function (event, context) {
    const promises = []
 
+   //throw 'Non valid event type'
+
    event.Records.forEach((record) => {
       promises.push(createEvent(record.Sns))
    })

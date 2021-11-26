@@ -20,9 +20,11 @@ export class EventsDdbStack extends cdk.Stack {
          },
          timeToLiveAttribute: "ttl",
          removalPolicy: RemovalPolicy.DESTROY,
-         billingMode: dynamodb.BillingMode.PROVISIONED,
-         readCapacity: 1,
-         writeCapacity: 1
+         billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+         //readCapacity: 1,
+         //writeCapacity: 1
       })
+
+
    }
 }
