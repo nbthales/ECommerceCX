@@ -15,7 +15,7 @@ const env = {
 const tags = {
   cost: "ECommerceCX",
   team: "SiecolaCodeCX"
-} 
+}
 
 const eventsDdbStack = new EventsDdbStack(app, "EventsDdb", {
   env: env,
@@ -48,6 +48,7 @@ ordersApplicationStack.addDependency(eventsDdbStack)
 const eCommerceApiStack = new ECommerceApiStack(app, "ECommerceApi", {
   productsHandler: productsFunctionStack.productsHandler,
   ordersHandler: ordersApplicationStack.ordersHandler,
+  orderEventsFetchHandler: ordersApplicationStack.orderEventsFetchHandler,
   env: env,
   tags: tags
 })

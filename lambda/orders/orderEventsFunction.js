@@ -7,7 +7,7 @@ const awsRegion = process.env.AWS_REGION
 const eventsDdb = process.env.EVENTS_DDB
 
 AWS.config.update({
-   region: awsRegion   
+   region: awsRegion
 })
 
 const ddbClient = new AWS.DynamoDB.DocumentClient()
@@ -33,7 +33,7 @@ function createEvent(body) {
    console.log(`Creating order event - MessageId: ${body.MessageId}`)
 
    const timestamp = Date.now()
-   const ttl = ~~(timestamp / 1000 + 5 * 60) // 5 minutes ahead, in seconds
+   const ttl = ~~(timestamp / 1000 + 120 * 60) // 120 minutes ahead, in seconds
    const params = {
       TableName: eventsDdb,
       Item: {
@@ -50,6 +50,6 @@ function createEvent(body) {
             messageId: body.MessageId
          }
       }
-    }
-    return ddbClient.put(params).promise()
+   }
+   return ddbClient.put(params).promise()
 }

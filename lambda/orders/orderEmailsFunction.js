@@ -43,7 +43,7 @@ function sendOrderEmail(body) {
                 Body: {
                     Text: {
                         Charset: "UTF-8",
-                        Data: `Recebemos seu pedido de numero ${event.orderId}, no valor de R$ ${event.billing.totalPrice}.`
+                        Data: `Recebemos seu pedido de número ${event.orderId}, no valor de R$ ${event.billing.totalPrice}.`
                     }
                 },
                 Subject: {

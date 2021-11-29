@@ -37,7 +37,7 @@ function createEvent(productEvent) {
     }
     */
    const timestamp = Date.now()
-   const ttl = ~~(timestamp / 1000 + 5 * 60) // 5 minutes ahead, in seconds
+   const ttl = ~~(timestamp / 1000 + 120 * 60) // 120 minutes ahead, in seconds
    const params = {
       TableName: eventsDdb,
       Item: {

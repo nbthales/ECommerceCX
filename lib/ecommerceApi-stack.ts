@@ -4,7 +4,8 @@ import * as lambdaNodeJS from "@aws-cdk/aws-lambda-nodejs"
 
 interface ECommerceApiStackProps extends cdk.StackProps {
    productsHandler: lambdaNodeJS.NodejsFunction,
-   ordersHandler: lambdaNodeJS.NodejsFunction
+   ordersHandler: lambdaNodeJS.NodejsFunction,
+   orderEventsFetchHandler: lambdaNodeJS.NodejsFunction
 }
 
 export class ECommerceApiStack extends cdk.Stack {
@@ -82,6 +83,14 @@ export class ECommerceApiStack extends cdk.Stack {
          requestValidator: orderRequestValidator,
          requestModels: { "application/json": orderModel }
       })
+
+      const oderEventsFetchIntegration = new apigateway.LambdaIntegration(props.orderEventsFetchHandler)
+
+      //resource - /orders/events
+      const orderEventsFetchResource = ordersResource.addResource("events")
+      //GET /orders/events?email=matilde@siecola.com.br
+      //GET /orders/events?email=matilde@siecola.com.br&eventType=ORDER_CREATED
+      orderEventsFetchResource.addMethod("GET", oderEventsFetchIntegration)
    }
 
    private createProductsResource(apiGW: apigateway.RestApi, props: ECommerceApiStackProps) {
