@@ -7,6 +7,8 @@ import * as subs from "@aws-cdk/aws-sns-subscriptions"
 import * as iam from "@aws-cdk/aws-iam"
 import * as sqs from "@aws-cdk/aws-sqs"
 import * as lambdaEventSource from "@aws-cdk/aws-lambda-event-sources"
+import * as logs from '@aws-cdk/aws-logs'
+import * as cw from '@aws-cdk/aws-cloudwatch'
 
 interface OrdersApplicationStackProps extends cdk.StackProps {
     productsDdb: dynamodb.Table,
@@ -218,5 +220,15 @@ export class OrdersApplicationStack extends cdk.Stack {
                 }*/
         })
         this.orderEventsFetchHandler.addToRolePolicy(eventsFetchDdbPolicy)
+
+        //Metric
+        const productNotFoundMetricFilder = this.ordersHandler.logGroup.addMetricFilter('ProductNotFoundMetric', {
+            filterPattern: logs.FilterPattern.literal('Some product was not found'),
+            metricName: 'OrderWithNonValidProduct',
+            metricNamespace: 'ProductNotFound'
+        })
+        //Alarm
+
+        //Alarm action
     }
 }

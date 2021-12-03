@@ -61,5 +61,7 @@ const invoiceWSApiStack = new InvoiceWSApiStack(app, "InvoiceApi", {
     cost: "InvoiceApp",
     team: "SiecolaCode"
   },
-  env: env
+  env: env,
+  eventsDdb: eventsDdbStack.table
 })
+invoiceWSApiStack.addDependency(eventsDdbStack)

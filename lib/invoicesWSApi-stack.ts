@@ -7,9 +7,16 @@ import * as apigatewayv2 from "@aws-cdk/aws-apigatewayv2"
 import * as apigatewayv2_integrations from "@aws-cdk/aws-apigatewayv2-integrations"
 import * as s3 from "@aws-cdk/aws-s3"
 import * as s3n from "@aws-cdk/aws-s3-notifications"
+import * as lambdaEventSource from "@aws-cdk/aws-lambda-event-sources"
+import * as sqs from "@aws-cdk/aws-sqs"
+import { SqsDlq } from "@aws-cdk/aws-lambda-event-sources"
+
+interface InvoiceWSApiStackProps extends cdk.StackProps {
+    eventsDdb: dynamodb.Table
+}
 
 export class InvoiceWSApiStack extends cdk.Stack {
-    constructor(scope: cdk.Construct, id: string, props?: cdk.StackProps) {
+    constructor(scope: cdk.Construct, id: string, props: InvoiceWSApiStackProps) {
         super(scope, id, props)
 
         //Invoice and invoice transactions DDB
@@ -24,8 +31,9 @@ export class InvoiceWSApiStack extends cdk.Stack {
                 type: dynamodb.AttributeType.STRING
             },
             timeToLiveAttribute: "ttl",
+            stream: dynamodb.StreamViewType.NEW_AND_OLD_IMAGES,
             removalPolicy: cdk.RemovalPolicy.DESTROY,
-            billingMode: dynamodb.BillingMode.PAY_PER_REQUEST
+            billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
         })
 
         //Invoice bucket
@@ -49,7 +57,7 @@ export class InvoiceWSApiStack extends cdk.Stack {
             }
         })
 
-        //Websocket disconnection handler
+        //WebSocket disconnection handler
         const disconnectionHandler = new lambdaNodeJS.NodejsFunction(this, "InvoiceDisconnectionFunction", {
             functionName: "InvoiceDisconnectionFunction",
             entry: "lambda/invoices/invoiceDisconnectionFunction.js",
@@ -64,19 +72,21 @@ export class InvoiceWSApiStack extends cdk.Stack {
             }
         })
 
-        //Websocket API
+        //WebSocket API
         const webSocketApi = new apigatewayv2.WebSocketApi(this, "InvoiceWSApi", {
             apiName: "InvoiceWSApi",
             connectRouteOptions: {
-                integration: new apigatewayv2_integrations.LambdaWebSocketIntegration({
-                    handler: connectionHandler
-                })
+                integration:
+                    new apigatewayv2_integrations.LambdaWebSocketIntegration({
+                        handler: connectionHandler,
+                    }),
             },
             disconnectRouteOptions: {
-                integration: new apigatewayv2_integrations.LambdaWebSocketIntegration({
-                    handler: disconnectionHandler
-                })
-            }
+                integration:
+                    new apigatewayv2_integrations.LambdaWebSocketIntegration({
+                        handler: disconnectionHandler,
+                    }),
+            },
         })
 
         const stage = 'prod'
@@ -119,7 +129,7 @@ export class InvoiceWSApiStack extends cdk.Stack {
         })
         const invoicesDdbWriteTransactionPolicy = new iam.PolicyStatement({
             effect: iam.Effect.ALLOW,
-            actions: ['dynamo:PutItem'],
+            actions: ['dynamodb:PutItem'],
             resources: [invoicesDdb.tableArn],
             conditions: {
                 ['ForAllValues:StringLike']: {
@@ -167,9 +177,10 @@ export class InvoiceWSApiStack extends cdk.Stack {
 
         bucket.addEventNotification(s3.EventType.OBJECT_CREATED_PUT, new s3n.LambdaDestination(invoiceImportHandler))
 
-        //Cancel impor handler
 
-        //Websocket API routes
+        //Cancel import handler
+
+        //WebSocket API routes
         webSocketApi.addRoute('getImportUrl', {
             integration: new apigatewayv2_integrations.LambdaWebSocketIntegration({
                 handler: getUrlHandler
@@ -177,11 +188,57 @@ export class InvoiceWSApiStack extends cdk.Stack {
         })
 
         /*
-        webSocketApi.addRoute('cancelImportUrl', {
-            integration: new apigatewayv2_integrations.LambdaWebSocketIntegration({
-                handler: cancelImportHandler
-            })
+        webSocketApi.addRoute('cancelImport', {
+           integration: new apigatewayv2_integrations.LambdaWebSocketIntegration({
+              handler: cancelImportHandler
+           })
         })
         */
+
+        const invoiceEventsHandler = new lambdaNodeJS.NodejsFunction(this, "InvoiceEventsFunction", {
+            functionName: "InvoiceEventsFunction",
+            entry: "lambda/invoices/invoiceEventsFunction.js",
+            handler: "handler",
+            memorySize: 128,
+            timeout: cdk.Duration.seconds(10),
+            tracing: lambda.Tracing.ACTIVE,
+            insightsVersion: lambda.LambdaInsightsVersion.VERSION_1_0_98_0,
+            bundling: {
+                minify: false,
+                sourceMap: false,
+            },
+            environment: {
+                EVENTS_DDB: props.eventsDdb.tableName,
+                INVOICE_WSAPI_ENDPOINT: wsApiEndpoint
+            }
+        })
+
+        const eventsDdbPolicy = new iam.PolicyStatement({
+            effect: iam.Effect.ALLOW,
+            actions: ["dynamodb:PutItem"],
+            resources: [props.eventsDdb.tableArn],
+            conditions: {
+                ['ForAllValues:StringLike']: {
+                    'dynamodb:LeadingKeys': ['#invoice_*']
+                }
+            }
+        })
+        invoiceEventsHandler.addToRolePolicy(eventsDdbPolicy)
+        invoiceEventsHandler.addToRolePolicy(wsApiPolicy)
+
+        const invoiceEventsDlq = new sqs.Queue(this, "InvoiceEventsDlq", {
+            queueName: "invoice-events-dlq",
+            retentionPeriod: cdk.Duration.days(10)
+        })
+
+        invoiceEventsHandler.addEventSource(
+            new lambdaEventSource.DynamoEventSource(invoicesDdb, {
+                startingPosition: lambda.StartingPosition.TRIM_HORIZON,
+                batchSize: 5,
+                bisectBatchOnError: true,
+                onFailure: new SqsDlq(invoiceEventsDlq),
+                retryAttempts: 3
+            })
+        )
     }
 }

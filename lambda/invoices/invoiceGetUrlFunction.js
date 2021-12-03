@@ -5,9 +5,9 @@ const uuid = require("uuid")
 const xRay = AWSXray.captureAWS(require("aws-sdk"))
 
 const awsRegion = process.env.AWS_REGION
-const invoicesDdb = proccess.env.INVOICES_DDB
-const bucketName = proccess.env.BUCKET_NAME
-const invoiceWsApiEndpoint = proccess.env.INVOICE_WSAPI_ENDPOINT
+const invoicesDdb = process.env.INVOICES_DDB
+const bucketName = process.env.BUCKET_NAME
+const invoiceWsApiEndpoint = process.env.INVOICE_WSAPI_ENDPOINT.substring(6)
 
 AWS.config.update({
     region: awsRegion
@@ -17,7 +17,6 @@ const ddbClient = new AWS.DynamoDB.DocumentClient()
 const s3Client = new AWS.S3({
     region: awsRegion
 })
-
 const apigwManagementApi = new AWS.ApiGatewayManagementApi({
     apiVersion: '2018-11-29',
     endpoint: invoiceWsApiEndpoint
@@ -60,7 +59,7 @@ exports.handler = async function (event, context) {
 
 function createInvoiceTransaction(key, lambdaRequestId, expires, connectionId, invoiceWsApiEndpoint) {
     const timestamp = Date.now()
-    const ttl = ~~(timestamp / 1000 * 2 * 60)
+    const ttl = ~~(timestamp / 1000 + 2 * 60)
 
     const params = {
         TableName: invoicesDdb,
