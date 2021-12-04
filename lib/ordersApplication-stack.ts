@@ -130,7 +130,7 @@ export class OrdersApplicationStack extends cdk.Stack {
             timeout: cdk.Duration.seconds(10),
             tracing: lambda.Tracing.ACTIVE,
             insightsVersion: lambda.LambdaInsightsVersion.VERSION_1_0_98_0,
-            //deadLetterQueueEnabled: true,
+            deadLetterQueueEnabled: true,
             bundling: {
                 minify: false,
                 sourceMap: false,
@@ -193,8 +193,8 @@ export class OrdersApplicationStack extends cdk.Stack {
         })
         orderEmailsHandler.addToRolePolicy(orderEmailSesPolicy)
 
-        this.orderEventsFetchHandler = new lambdaNodeJS.NodejsFunction(this, "OrderEventsFetchHandler", {
-            functionName: "OrderEventsFetchHandler",
+        this.orderEventsFetchHandler = new lambdaNodeJS.NodejsFunction(this, "OrderEventsFetchFunction", {
+            functionName: "OrderEventsFetchFunction",
             entry: "lambda/orders/orderEventsFetchFunction.js",
             handler: "handler",
             memorySize: 128,

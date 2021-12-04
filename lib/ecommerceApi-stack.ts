@@ -84,13 +84,13 @@ export class ECommerceApiStack extends cdk.Stack {
          requestModels: { "application/json": orderModel }
       })
 
-      const oderEventsFetchIntegration = new apigateway.LambdaIntegration(props.orderEventsFetchHandler)
+      const orderEventsFetchIntegration = new apigateway.LambdaIntegration(props.orderEventsFetchHandler)
 
       //resource - /orders/events
       const orderEventsFetchResource = ordersResource.addResource("events")
       //GET /orders/events?email=matilde@siecola.com.br
       //GET /orders/events?email=matilde@siecola.com.br&eventType=ORDER_CREATED
-      orderEventsFetchResource.addMethod("GET", oderEventsFetchIntegration)
+      orderEventsFetchResource.addMethod("GET", orderEventsFetchIntegration)
    }
 
    private createProductsResource(apiGW: apigateway.RestApi, props: ECommerceApiStackProps) {

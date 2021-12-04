@@ -12,6 +12,29 @@ const sesClient = new AWS.SES({ apiVersion: '2010-12-01' })
 
 exports.handler = async function (event, context) {
 
+    /*
+    {
+     "eventType": "ORDER_CREATED",
+     "data": {
+         "email": "matilde@siecola.com.br",
+         "orderId": "0236a08d-ff14-48a3-bf98-ef419c7e6763",
+         "billing": {
+             "payment": "CASH",
+             "totalPrice": 31
+         },
+         "shipping": {
+             "type": "URGENT",
+             "carrier": "FEDEX"
+         },
+         "productCodes": [
+             "COD1",
+             "COD2"
+         ],
+         "requestId": "f470cf12-9c8a-49e0-8fb6-503273e849da"
+     }
+    }
+    */
+
     console.log('Order event')
     const promises = []
     //TODO - to be removed
