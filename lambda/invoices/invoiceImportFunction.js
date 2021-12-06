@@ -49,17 +49,25 @@ exports.handler = async function (event, context) {
     const object = await s3Client.getObject(params).promise()
     const invoice = JSON.parse(object.Body.toString('utf-8'))
 
-    const createInvoicePromise = createInvoice(invoice, key)
-    const deleteInvoicePromise = s3Client.deleteObject(params).promise()
+    let createInvoicePromise
+    let deleteInvoicePromise
+    let lastInvoiceStatus = "INVOICE_PROCESSED"
+    if (invoice.invoiceNumber) {
+        createInvoicePromise = createInvoice(invoice, key)
+        deleteInvoicePromise = s3Client.deleteObject(params).promise()
+    } else {
+        console.error('No invoice number received')
+        lastInvoiceStatus = "NO_INVOICE_NUMBER"
+    }
 
     if (invoiceTransaction) {
         await Promise.all([
-            sendInvoiceStatus(invoiceTransaction.sk, invoiceTransaction.connectionId, "INVOICE_PROCESSED"),
-            updateInvoiceTransaction(key, "INVOICE_PROCESSED")
+            sendInvoiceStatus(invoiceTransaction.sk, invoiceTransaction.connectionId, lastInvoiceStatus),
+            updateInvoiceTransaction(key, lastInvoiceStatus)
         ])
     }
 
-    await Promise.all([createInvoicePromise, deleteInvoicePromise])
+    await Promise.all([createInvoicePromise, deleteInvoicePromise, disconnectClient(invoiceTransaction.connectionId)])
 }
 function getInvoiceTransaction(key) {
     const params = {
@@ -71,16 +79,42 @@ function getInvoiceTransaction(key) {
     }
     return ddbClient.get(params).promise()
 }
-function sendInvoiceStatus(transactionId, connectionId, status) {
-    const postData = JSON.stringify({
-        key: transactionId,
-        status: status
-    })
-    return apigwManagementApi.postToConnection({
-        ConnectionId: connectionId,
-        Data: postData
-    }).promise()
+async function disconnectClient(connectionId) {
+    try {
+        const params = {
+            ConnectionId: connectionId
+        }
+
+        await apigwManagementApi.getConnection(params).promise()
+
+        return apigwManagementApi.deleteConnection(params).promise()
+    } catch (err) {
+        console.log(err)
+    }
 }
+
+async function sendInvoiceStatus(transactionId, connectionId, status) {
+    try {
+        const params = {
+            ConnectionId: connectionId
+        }
+
+        await apigwManagementApi.getConnection(params).promise()
+
+        const postData = JSON.stringify({
+            key: transactionId,
+            status: status
+        })
+
+        return apigwManagementApi.postToConnection({
+            ConnectionId: connectionId,
+            Data: postData
+        }).promise()
+    } catch (err) {
+        console.log(err)
+    }
+}
+
 function createInvoice(invoice, transactionId) {
     const params = {
         TableName: invoicesDdb,

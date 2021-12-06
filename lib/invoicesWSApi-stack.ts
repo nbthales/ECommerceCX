@@ -10,6 +10,8 @@ import * as s3n from "@aws-cdk/aws-s3-notifications"
 import * as lambdaEventSource from "@aws-cdk/aws-lambda-event-sources"
 import * as sqs from "@aws-cdk/aws-sqs"
 import { SqsDlq } from "@aws-cdk/aws-lambda-event-sources"
+import * as logs from '@aws-cdk/aws-logs'
+import * as cw from '@aws-cdk/aws-cloudwatch'
 
 interface InvoiceWSApiStackProps extends cdk.StackProps {
     eventsDdb: dynamodb.Table
@@ -177,6 +179,28 @@ export class InvoiceWSApiStack extends cdk.Stack {
 
         bucket.addEventNotification(s3.EventType.OBJECT_CREATED_PUT, new s3n.LambdaDestination(invoiceImportHandler))
 
+        //Metric
+        const noInvoiceNumberMetricFilter = invoiceImportHandler.logGroup.addMetricFilter('NoInvoiceNumberMetric', {
+            filterPattern: logs.FilterPattern.literal('No invoice number received'),
+            metricName: 'NoInvoiceNumber',
+            metricNamespace: 'NoInvoiceNumberMetric'
+        })
+
+        //Alarm
+        const noInvoiceNumberAlarm = noInvoiceNumberMetricFilter
+            .metric()
+            .with({
+                period: cdk.Duration.minutes(2),
+                statistic: 'Sum'
+            })
+            .createAlarm(this, "NoInvoiceNumberAlarm", {
+                alarmName: 'NoInvoiceNumber',
+                alarmDescription: 'No invoice number received',
+                evaluationPeriods: 1,
+                threshold: 2,
+                actionsEnabled: false,
+                comparisonOperator: cw.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD
+            })
 
         //Cancel import handler
 

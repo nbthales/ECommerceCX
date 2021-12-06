@@ -79,15 +79,45 @@ export class ECommerceApiStack extends cdk.Stack {
          }
       })
       //POST /orders
-      ordersResource.addMethod("POST", ordersFunctionIntegration, {
+      const postOrder = ordersResource.addMethod("POST", ordersFunctionIntegration, {
          requestValidator: orderRequestValidator,
-         requestModels: { "application/json": orderModel }
+         requestModels: { "application/json": orderModel },
+         apiKeyRequired: true
       })
+
+      const key = apiGW.addApiKey("ApiKey")
+      const plan = apiGW.addUsagePlan("UsagePlan", {
+         name: "Bascic plan",
+         throttle: {
+            rateLimit: 4,
+            burstLimit: 2
+         },
+         quota: {
+            limit: 5,
+            period: apigateway.Period.DAY
+         }
+      })
+      plan.addApiKey(key);
+
+      plan.addApiStage({
+         stage: apiGW.deploymentStage,
+         throttle: [
+            {
+               method: postOrder,
+               throttle: {
+                  rateLimit: 4,
+                  burstLimit: 2,
+               },
+            },
+         ],
+      });
+
 
       const orderEventsFetchIntegration = new apigateway.LambdaIntegration(props.orderEventsFetchHandler)
 
       //resource - /orders/events
       const orderEventsFetchResource = ordersResource.addResource("events")
+
       //GET /orders/events?email=matilde@siecola.com.br
       //GET /orders/events?email=matilde@siecola.com.br&eventType=ORDER_CREATED
       orderEventsFetchResource.addMethod("GET", orderEventsFetchIntegration)

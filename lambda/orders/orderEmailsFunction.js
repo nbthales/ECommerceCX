@@ -54,32 +54,27 @@ exports.handler = async function (event, context) {
 }
 
 function sendOrderEmail(body) {
-    try {
-        const envelope = JSON.parse(body.Message)
-        const event = JSON.parse(envelope.data)
-        console.log('logEvent: ', event);
-        const params = {
-            Destination: {
-                ToAddresses: [event.email]
-            },
-            Message: {
-                Body: {
-                    Text: {
-                        Charset: "UTF-8",
-                        Data: `Recebemos seu pedido de nÃºmero ${event.orderId}, no valor de R$ ${event.billing.totalPrice}.`
-                    }
-                },
-                Subject: {
+    const envelope = JSON.parse(body.Message)
+    const event = JSON.parse(envelope.data)
+
+    const params = {
+        Destination: {
+            ToAddresses: [event.email]
+        },
+        Message: {
+            Body: {
+                Text: {
                     Charset: "UTF-8",
-                    Data: 'Recebemos seu pedido!'
+                    Data: `Recebemos seu pedido de número ${event.orderId}, no valor de R$ ${event.billing.totalPrice}.`
                 }
             },
-            Source: 'nbthales2@gmail.com',
-            ReplyToAddresses: ['nbthales@gmail.com']
-        }
-        return sesClient.sendEmail(params).promise()
-    } catch (error) {
-        console.log(error);
-        return
+            Subject: {
+                Charset: "UTF-8",
+                Data: 'Recebemos seu pedido!'
+            }
+        },
+        Source: 'nbthales2@gmail.com',
+        ReplyToAddresses: ['nbthales@gmail.com']
     }
+    return sesClient.sendEmail(params).promise()
 }

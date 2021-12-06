@@ -77,9 +77,10 @@ exports.handler = async function (event, context) {
                     body: JSON.stringify(convertToOrderResponse(orderCreated))
                 }
             } else {
+                console.error('Some product was not found')
                 return {
                     statusCode: 404,
-                    body: 'Some product was not foud'
+                    body: 'Some product was not found'
                 }
             }
         } else if (method === 'DELETE') {

@@ -34,28 +34,55 @@ export class OrdersApplicationStack extends cdk.Stack {
             },
             removalPolicy: cdk.RemovalPolicy.DESTROY,
             billingMode: dynamodb.BillingMode.PROVISIONED,
-            //readCapacity: 1,
-            //writeCapacity: 1
+            readCapacity: 1,
+            writeCapacity: 1
         })
+        //Metric
+        const writeThrotlleEventsMetric = ordersDdb.metric('WriteThrottleEvents', {
+            period: cdk.Duration.minutes(2),
+            statistic: 'SampleCount',
+            unit: cw.Unit.COUNT
+        })
+        //Alarm
+        writeThrotlleEventsMetric.createAlarm(this, "WriteThrottleEventsAlarm", {
+            alarmName: 'WriteThrottleEvents',
+            alarmDescription: 'Write throttled events alarm in orders DDB',
+            actionsEnabled: false,
+            evaluationPeriods: 1,
+            threshold: 25,
+            comparisonOperator: cw.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+            treatMissingData: cw.TreatMissingData.NOT_BREACHING
+        })
+
+        /*
         const readScale = ordersDdb.autoScaleReadCapacity({
-            maxCapacity: 2,
-            minCapacity: 1
+           maxCapacity: 2,
+           minCapacity: 1
         })
         readScale.scaleOnUtilization({
-            targetUtilizationPercent: 80,
-            scaleInCooldown: cdk.Duration.seconds(120),
+           targetUtilizationPercent: 80,
+           scaleInCooldown: cdk.Duration.seconds(120),
+           scaleOutCooldown: cdk.Duration.seconds(60)        
             scaleOutCooldown: cdk.Duration.seconds(60)
+           scaleOutCooldown: cdk.Duration.seconds(60)        
+            scaleOutCooldown: cdk.Duration.seconds(60)
+           scaleOutCooldown: cdk.Duration.seconds(60)        
         })
 
         const writeScale = ordersDdb.autoScaleWriteCapacity({
-            maxCapacity: 4,
-            minCapacity: 1
+           maxCapacity: 4,
+           minCapacity: 1
         })
         writeScale.scaleOnUtilization({
-            targetUtilizationPercent: 20,
-            scaleInCooldown: cdk.Duration.seconds(60),
+           targetUtilizationPercent: 20,
+           scaleInCooldown: cdk.Duration.seconds(60),
+           scaleOutCooldown: cdk.Duration.seconds(60)        
             scaleOutCooldown: cdk.Duration.seconds(60)
+           scaleOutCooldown: cdk.Duration.seconds(60)        
+            scaleOutCooldown: cdk.Duration.seconds(60)
+           scaleOutCooldown: cdk.Duration.seconds(60)        
         })
+        */
 
         const ordersTopic = new sns.Topic(this, "OrderEventsTopic", {
             displayName: "Orders events topic",
@@ -149,6 +176,36 @@ export class OrdersApplicationStack extends cdk.Stack {
             queueName: "order-events-dlq",
             retentionPeriod: cdk.Duration.days(10)
         })
+        //Metric
+        const numberOfMessagesMetric = orderEventsDlq.metricApproximateNumberOfMessagesVisible({
+            period: cdk.Duration.minutes(2),
+            statistic: 'Sum'
+        })
+        //Alarm
+        numberOfMessagesMetric.createAlarm(this, "OrderEmailFail", {
+            alarmName: 'OrderEmailFail',
+            alarmDescription: 'Order email fail',
+            actionsEnabled: false,
+            evaluationPeriods: 1,
+            threshold: 5,
+            comparisonOperator: cw.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD
+        })
+
+        //Metric
+        const ageOfMessageMetric = orderEventsDlq.metricApproximateAgeOfOldestMessage({
+            period: cdk.Duration.minutes(2),
+            statistic: 'Maximum',
+            unit: cw.Unit.SECONDS
+        })
+        //Alarm
+        ageOfMessageMetric.createAlarm(this, "AgeOfMessagesInQueue", {
+            alarmName: "AgeOfMessagesQueue",
+            alarmDescription: "Maximum age of messages in order events queue",
+            actionsEnabled: false,
+            evaluationPeriods: 1,
+            threshold: 60,
+            comparisonOperator: cw.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD
+        })
 
         const orderEventsQueue = new sqs.Queue(this, "OrderEventsQueue", {
             queueName: "order-events",
@@ -157,7 +214,6 @@ export class OrdersApplicationStack extends cdk.Stack {
                 queue: orderEventsDlq
             }
         })
-
         ordersTopic.addSubscription(new subs.SqsSubscription(orderEventsQueue, {
             filterPolicy: {
                 eventType: sns.SubscriptionFilter.stringFilter({
@@ -179,11 +235,11 @@ export class OrdersApplicationStack extends cdk.Stack {
                 sourceMap: false,
             }
         })
-        orderEmailsHandler.addEventSource(new lambdaEventSource.SqsEventSource(orderEventsQueue, {
-            batchSize: 5,
-            enabled: true,
-            maxBatchingWindow: cdk.Duration.seconds(10)
-        }))
+        orderEmailsHandler.addEventSource(new lambdaEventSource.SqsEventSource(orderEventsQueue/*, {
+         batchSize: 5,
+         enabled: true,
+         maxBatchingWindow: cdk.Duration.seconds(10)
+      }*/))
         orderEventsQueue.grantConsumeMessages(orderEmailsHandler)
 
         const orderEmailSesPolicy = new iam.PolicyStatement({
@@ -222,13 +278,39 @@ export class OrdersApplicationStack extends cdk.Stack {
         this.orderEventsFetchHandler.addToRolePolicy(eventsFetchDdbPolicy)
 
         //Metric
-        const productNotFoundMetricFilder = this.ordersHandler.logGroup.addMetricFilter('ProductNotFoundMetric', {
+        const productNotFoundMetricFilter = this.ordersHandler.logGroup.addMetricFilter('ProductNotFoundMetric', {
             filterPattern: logs.FilterPattern.literal('Some product was not found'),
             metricName: 'OrderWithNonValidProduct',
             metricNamespace: 'ProductNotFound'
         })
+
         //Alarm
+        const productNotFoundAlarm = productNotFoundMetricFilter
+            .metric()
+            .with({
+                period: cdk.Duration.minutes(2),
+                statistic: 'Sum'
+            })
+            .createAlarm(this, "ProductNotFoundAlarm", {
+                alarmName: 'OrderWithNonValidProduct',
+                alarmDescription: 'Some product was not found while creating a new order',
+                evaluationPeriods: 1,
+                threshold: 2,
+                actionsEnabled: true,
+                comparisonOperator: cw.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD
+            })
 
         //Alarm action
+        const orderAlarmsTopic = new sns.Topic(this, "OrderAlarmsTopic", {
+            displayName: 'Order alarms topic',
+            topicName: "order-alarms"
+        })
+        orderAlarmsTopic.addSubscription(new subs.EmailSubscription('siecola@gmail.com'))
+        productNotFoundAlarm.addAlarmAction({
+            bind(): cw.AlarmActionConfig {
+                return { alarmActionArn: orderAlarmsTopic.topicArn }
+            }
+        })
+
     }
 }
